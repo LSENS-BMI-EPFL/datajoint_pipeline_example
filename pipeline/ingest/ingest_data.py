@@ -1,21 +1,21 @@
-import os, sys
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+import os, sys              # os module   https://www.youtube.com/watch?v=tJxcKyFMTGo   sys module, system output etc. https://www.youtube.com/watch?v=rLG7Tz6db0w
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))           # Question:  what is '..' stands for?
 
-import re
-import scipy.io as sio
-from tqdm import tqdm
-import pathlib
-from decimal import Decimal
+import re                   # Regular Expressions module    https://www.youtube.com/watch?v=K8L6KVGG-7o
+import scipy.io as sio      # For read or Write Mat file    https://www.youtube.com/watch?v=5D8DKPEUXws
+from tqdm import tqdm       # For progress bar
+import pathlib              # Enalbe code works under different operating system. Similar to OS module.
+from decimal import Decimal # To avoid decimal related issues.
 import numpy as np
 
-from pipeline import lab, experiment, imaging
-from pipeline import parse_date, time_unit_conversion_factor
+from pipeline import lab, experiment, imaging                           # three schema definition files
+from pipeline import parse_date, time_unit_conversion_factor            # included in pipeline __init__ 
 
 
 def main(data_dir='/data/data_structure'):
-    data_dir = pathlib.Path(data_dir)
+    data_dir = pathlib.Path(data_dir)                                           # make sure works for different operating system 
     if not data_dir.exists():
-        raise FileNotFoundError(f'Path not found!! {data_dir.as_posix()}')
+        raise FileNotFoundError(f'Path not found!! {data_dir.as_posix()}')      
 
     # ==================== DEFINE CONSTANTS =====================
 
@@ -34,15 +34,15 @@ def main(data_dir='/data/data_structure'):
     task_protocol = {'task': 'audio delay', 'task_protocol': 1}
 
 
-    insert_kwargs = {'ignore_extra_fields': True, 'allow_direct_insert': True, 'skip_duplicates': True}
+    insert_kwargs = {'ignore_extra_fields': True, 'allow_direct_insert': True, 'skip_duplicates': True}             # do we need to pay attention to skip_duplicates? don't know what kind of impact it would have.
 
     # ================== INGESTION OF DATA ==================
     data_files = data_dir.glob('*.mat')
 
-    for data_file in data_files:
+    for data_file in data_files:                                    # loop for each mat file(each experiment session).
         print(f'-- Read {data_file} --')
 
-        fname = data_file.stem
+        fname = data_file.stem                                      # extract information from mat file name
         subject_nickname = re.search('data_(an\d+)_', fname).group(1)
         session_date = parse_date(re.search(subject_nickname + '_(\d+_\d+_\d+_)', fname).group(1).replace('_', ''))
         depth = int(re.search('_(\d+)(_fv|$)', fname).group(1))
@@ -57,13 +57,13 @@ def main(data_dir='/data/data_structure'):
         else:
             raise Exception('Multiple sessions found for {fname}')
 
-        print(f'\tMatched: {session_key}')
+        print(f'\tMatched: {session_key}')                           # above query database and to determin if ingestion for this mat file is needed.
 
         if imaging.TrialTrace & session_key:
             print('Data ingested, skipping over...')
             continue
 
-        sess_data = sio.loadmat(data_file, struct_as_record = False, squeeze_me=True)['obj']
+        sess_data = sio.loadmat(data_file, struct_as_record = False, squeeze_me=True)['obj']        # load experiment session mat file
 
         # ---- trial data ----
         trial_zip = zip(sess_data.trialIds, sess_data.trialStartTimes,
@@ -101,7 +101,7 @@ def main(data_dir='/data/data_structure'):
                                             trial_event_type=etype, trial_event_time=etime))
 
         # insert trial info
-        experiment.SessionTrial.insert(session_trials, **insert_kwargs)
+        experiment.SessionTrial.insert(session_trials, **insert_kwargs)             # insert trial info
         experiment.BehaviorTrial.insert(behavior_trials, **insert_kwargs)
         experiment.TrialEvent.insert(trial_events, **insert_kwargs)
 
@@ -129,7 +129,7 @@ def main(data_dir='/data/data_structure'):
                         sess_data.timeSeriesArrayHash.value[0].pixel_list,
                         sess_data.timeSeriesArrayHash.value[1].pixel_list)]
 
-        imaging.Scan.insert1(scan, **insert_kwargs)
+        imaging.Scan.insert1(scan, **insert_kwargs)                 # insert scan info
         imaging.Scan.Roi.insert(rois, **insert_kwargs)
 
         tr_events = {tr: (float(stime), float(gotime)) for tr, stime, gotime in
@@ -153,11 +153,11 @@ def main(data_dir='/data/data_structure'):
                                           aligned_trace=trace[go_id-45:go_id+45],
                                           dff=(trace[go_id-45:go_id+45] - np.mean(trace[go_id-45:go_id-39]))/np.mean(trace[go_id-45:go_id-39]))]
 
-        imaging.TrialTrace.insert(trial_traces, **insert_kwargs)
+        imaging.TrialTrace.insert(trial_traces, **insert_kwargs)        # insert TrialTrace for this session.
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':              # basically means excute this script.   https://www.youtube.com/watch?v=sugvnHA7ElY
     if len(sys.argv) > 1:
-        main(sys.argv[1])
+        main(sys.argv[1])               # sys.argv  well explained in this video.   https://www.youtube.com/watch?v=rLG7Tz6db0w
     else:
         main()
